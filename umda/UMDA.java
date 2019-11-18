@@ -67,7 +67,8 @@ public class UMDA {
         }
         
         for (int i = 0; i < getN(); i++){
-            model[i] = ((float) numOnes[i]) / getMU(); 
+            double newMarginal = ((double) numOnes[i]) / getMU(); 
+            model[i] = (newMarginal <= 1.0/n) ? 1.0/n : ((newMarginal >= 1-1.0/n) ? 1-1.0/n : newMarginal);
         }
         
     }
