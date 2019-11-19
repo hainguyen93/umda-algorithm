@@ -85,8 +85,8 @@ public class UMDA {
         return mu;
     }
     
-    public void sortPop(){
-        Collections.sort(population, new SortByFitness());
+    public void sortPop(Comparator<Individual> cmp){
+        Collections.sort(population, cmp);
     }
     
    
@@ -95,24 +95,19 @@ public class UMDA {
      */
     public static void main(String[] args) {
         UMDA umda = new UMDA(100, 10, 50, 100);
-        umda.sortPop();
+        Comparator<Individual> cmp = new SortForBinVal();
+        umda.sortPop(cmp);
         int iteration = 1;
         while (!umda.isStopCondFulfilled()){
             System.out.printf("%d \t %d \n", iteration, umda.getPop().get(0).eval());
             umda.updateModel();
             umda.samplePop();
-            umda.sortPop();
+            umda.sortPop(cmp);
             iteration++;
         }
         System.out.println(iteration);
     }
 }
 
-class SortByFitness implements Comparator<Individual>{
 
-    @Override
-    public int compare(Individual o1, Individual o2) {
-        return o2.eval() - o1.eval();
-    }
-}
 

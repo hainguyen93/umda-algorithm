@@ -30,7 +30,7 @@ public class Individual{
         }
     }
     
-    // onemax
+    // binval
     public int eval(){
         int sum = 0;
         for (int bit : bitstring){
