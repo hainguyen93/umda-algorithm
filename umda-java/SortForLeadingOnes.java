@@ -3,25 +3,27 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package umda;
-
 import java.util.Comparator;
 
 /**
  *
  * @author pthnguyen
  */
-public class SortForOneMax implements Comparator<Individual>{
+public class SortForLeadingOnes implements Comparator<Individual> {
 
     @Override
     public int compare(Individual o1, Individual o2) {
         return eval(o2) - eval(o1);
     }
-    
+
     private int eval(Individual o){
-        int sum = 0;
-        for (int i : o.getBitstring())
-            sum += i;
-        return sum;
+        int fitness = 0;
+        int indx = 0;
+        while (indx < o.getN() && o.getBitstring()[indx] != 0){
+            fitness++;
+            indx++;
+        }
+        return fitness;
     }
+
 }
