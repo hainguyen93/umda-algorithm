@@ -44,6 +44,24 @@ public class UMDA {
       return getN();
     }
 
+    public int[] countBitsAtBordersAfterCurrLevel(){
+      int currLevel = getCurrentLevel();
+      int numOnes[] = getOnesAmongMuFittest();
+      int ups = 0;
+      int lows = 0;
+      int inbw = 0;
+      for (int i = currLevel; i < getN(); i++){
+        if (numOnes[i] == getMU()){
+          ups++;
+        } else if (numOnes[i] == 0){
+          lows++;
+        } else {
+          inbw++;
+        }
+      }
+      return new int[]{ups, lows, inbw};
+    }
+
     public double[] getModel(){
         return model;
     }
@@ -80,6 +98,7 @@ public class UMDA {
               numOnes[j] += bitstring[j];
           }
       }
+      return numOnes;
     }
 
     public void updateModel(){
@@ -111,7 +130,9 @@ public class UMDA {
     }
 
     public void printCurrentLevel(int iteration){
-      System.out.printf("%d \t %d \n", iteration, getCurrentLevel());
+      int[] stats = countBitsAtBordersAfterCurrLevel();
+      String format = "%d \t %d \t %d \t %d \t %d \n";
+      System.out.printf(format, iteration, getCurrentLevel(), stats[0], stats[1], stats[2]);
     }
 
 
