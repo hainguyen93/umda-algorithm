@@ -34,6 +34,16 @@ public class UMDA {
         }
     }
 
+    public int getCurrentLevel(){
+      int[] numOnes = getOnesAmongMuFittest();
+      for (int i = 0; i < getN(); i++){
+        if (numOnes[i] != getMU()){
+          return i+1;
+        }
+      }
+      return getN();
+    }
+
     public double[] getModel(){
         return model;
     }
@@ -59,23 +69,29 @@ public class UMDA {
     }
 
     public ArrayList<Individual> getPop(){
-        return population;
+      return population;
+    }
+
+    public int[] getOnesAmongMuFittest(){
+      int[] numOnes = new int[getN()];
+      for (int i = 0; i < getMU(); i++){
+          int[] bitstring = population.get(i).getBitstring();
+          for (int j = 0; j < getN(); j++){
+              numOnes[j] += bitstring[j];
+          }
+      }
     }
 
     public void updateModel(){
-        int[] numOnes = new int[getN()];
-        for (int i = 0; i < getMU(); i++){
-            int[] bitstring = population.get(i).getBitstring();
-            for (int j = 0; j < getN(); j++){
-                numOnes[j] += bitstring[j];
-            }
-        }
-
-        for (int i = 0; i < getN(); i++){
+      int[] numOnes = getOnesAmongMuFittest();
+      for (int i = 0; i < getN(); i++){
             double newMarginal = ((double) numOnes[i]) / getMU();
-            model[i] = (newMarginal <= 1.0/n) ? 1.0/n : ((newMarginal >= 1-1.0/n) ? 1-1.0/n : newMarginal);
+            if (newMarginal <= 1.0/getN())
+              newMarginal = 1.0/getN();
+            else if (newMarginal >= 1 - 1.0/getN())
+              newMarginal = 1 - 1.0/getN();
+            model[i] = newMarginal;
         }
-
     }
 
     public boolean isStopCondFulfilled(){
@@ -92,6 +108,10 @@ public class UMDA {
 
     public void sortPop(Comparator<Individual> cmp){
         Collections.sort(population, cmp);
+    }
+
+    public void printCurrentLevel(int iteration){
+      System.out.printf("%d \t %d \n", iteration, getCurrentLevel());
     }
 
 
@@ -148,12 +168,13 @@ public class UMDA {
         //umda.printPop();
         int iteration = 1;
         while (!umda.isStopCondFulfilled()){
+            umda.printCurrentLevel(iteration);
             //System.out.printf("%d \t %d \n", iteration, umda.getPop().get(0).eval());
             umda.updateModel();
             umda.samplePop();
             umda.sortPop(cmp);
             iteration++;
         }
-        System.out.printf("%d \t %d \t %d\n", n, id, iteration*lambda);
+        //System.out.printf("%d \t %d \t %d\n", n, id, iteration*lambda);
     }
 }
