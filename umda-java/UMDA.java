@@ -186,10 +186,11 @@ public class UMDA {
         // run
         UMDA umda = new UMDA(n, mu, lambda, opt);
         umda.sortPop(cmp);
-        //umda.printPop();
         int iteration = 1;
         while (!umda.isStopCondFulfilled()){
-            umda.printCurrentLevel(iteration);
+            System.out.println(iteration + "\n");
+            umda.printPop();
+            //umda.printCurrentLevel(iteration);
             //System.out.printf("%d \t %d \n", iteration, umda.getPop().get(0).eval());
             umda.updateModel();
             umda.samplePop();
