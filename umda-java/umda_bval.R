@@ -1,12 +1,12 @@
 #setEPS()
 #postscript
-pdf(file="umda_bval_runtime.pdf", width = 16.0, height = 6)
+pdf(file="umda_bval_0.3.pdf", width = 16.0, height = 6)
 par(mfrow=c(1,1))
 mar.default = c(5, 4, 4, 2) + 0.1
 par(mar=mar.default+c(0,1,0,0))
 
 #small population size
-raw.small = read.table(file = "umda_binval_mulog_gamma0.2.txt", header= FALSE)
+raw.small = read.table(file = "umda_binval_power0.3_gamma0.2.txt", header= FALSE)
 
 for (n in seq(100, 1000, by=100)){
   print(nrow(raw.small[raw.small$V1==n, ]))
@@ -42,9 +42,9 @@ x = seq(100, 1000, by=100)
 y = rm
 
 
-boxplot(m/(x^1.5) ~ x, 
-        xlab = "Problem Instance Size n",
-        ylab = expression(T/n^1.5), main="UMDA on BinVal. Settings: \\mu=5*\\log(n), \\lambda=\\mu/0.2")
+boxplot(log(m)/(log(x)) ~ x, 
+        xlab = "Problem Instance Size n", ylim=c(1.40, 1.75),
+        ylab = expression(log(T)/log(n)), main="UMDA on BinVal. Settings: \\mu=n^0.3, \\lambda=\\mu/0.2")
 
 #abline(h=1.65, col="blue")
 grid(NA, 5, lwd = 2) 

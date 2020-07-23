@@ -17,13 +17,19 @@ public class SortForLeadingOnes implements Comparator<Individual> {
     }
 
     private int eval(Individual o){
-        int fitness = 0;
-        int indx = 0;
-        while (indx < o.getN() && o.getBitstring()[indx] != 0){
-            fitness++;
-            indx++;
-        }
-        return fitness;
+      int los = 0;
+      for (int bit: o.getBitstring()){
+        if (bit == 0) break;
+        los++;
+      }
+      return los;
+        // int fitness = 0;
+        // int indx = 0;
+        // while (indx < o.getN() && o.getBitstring()[indx] != 0){
+        //     fitness++;
+        //     indx++;
+        // }
+        // return fitness;
     }
 
 }

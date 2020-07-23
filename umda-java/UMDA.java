@@ -4,149 +4,206 @@
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.io.BufferedWriter;
+import java.io.PrintWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
 /**
  * @author pthnguyen
  */
 public class UMDA {
 
-    private int n;
-    private int mu;
-    private int lambda;
-    private int opt;
-    private ArrayList<Individual> population;
-    private double[] model;
+private int n;
+private int mu;
+private int lambda;
+private int opt;
+private int k;      //random variable k
+private int currentLevel;      //current level
+private ArrayList<Individual> population;
+private double[] model;
+private Evaluator evaluator;
 
-    public UMDA(int n, int mu, int lambda, int opt){
+// constructor
+public UMDA(int n, int mu, int lambda, int opt, Evaluator evaluator){
         this.n = n;
         this.mu = mu;
         this.lambda = lambda;
         this.opt = opt;
+        this.k = -1;
+        this.currentLevel = -1;
+        this.evaluator = evaluator;
         population = new ArrayList<Individual>();
         model = new double[n];
         initModel();
         samplePop();
-    }
+}
 
-    public void initModel(){
-        for (int i = 0; i < getN(); i++){
-            model[i] = 0.5;
+// initialise a uniform model
+public void initModel(){
+        for (int i = 0; i < getN(); i++) {
+                model[i] = 0.5;
         }
-    }
+}
 
-    public int getCurrentLevel(){
-      int[] numOnes = getOnesAmongMuFittest();
-      for (int i = 0; i < getN(); i++){
-        if (numOnes[i] != getMU()){
-          return i+1;
-        }
-      }
-      return getN();
-    }
-
-    public int[] countBitsAtBordersAfterCurrLevel(){
-      int currLevel = getCurrentLevel();
-      int numOnes[] = getOnesAmongMuFittest();
-      int ups = 0;
-      int lows = 0;
-      int inbw = 0;
-      for (int i = currLevel; i < getN(); i++){
-        if (numOnes[i] == getMU()){
-          ups++;
-        } else if (numOnes[i] == 0){
-          lows++;
-        } else {
-          inbw++;
-        }
-      }
-      return new int[]{ups, lows, inbw};
-    }
-
-    public double[] getModel(){
+public double[] getModel(){
         return model;
-    }
+}
 
-    public int getLambda(){
+public int getLambda(){
         return lambda;
-    }
+}
 
-    public void samplePop(){
-        for (int i = 0; i < getLambda(); i++){
-            Individual ind = new Individual(n);
-            ind.sample(getModel());
-            population.add(ind);
+public Evaluator getEvaluator(){
+        return evaluator;
+}
+
+public int getBestFitness(){
+        return evaluator.eval(population.get(0));
+}
+
+public void samplePop(){
+        for (int i = 0; i < getLambda(); i++) {
+                Individual ind = new Individual(getN());
+                ind.sample(getModel());
+                population.add(ind);
         }
-    }
+}
 
-    public void printPop(){
-        for (Individual o : population){
-            for (int i : o.getBitstring())
-                System.out.print(i);
-            System.out.println();
+// print out the population
+public void printPop(){
+        for (Individual o : population) {
+                for (int i : o.getBitstring())
+                        System.out.print(i);
+                System.out.println();
         }
-    }
+}
 
-    public ArrayList<Individual> getPop(){
-      return population;
-    }
+// print model and relevant stats to CSV file
+public void printToCSV(String filename){
+        try {
+                PrintWriter out = new PrintWriter(
+                        new BufferedWriter(
+                                new FileWriter(filename, true)));
+                StringBuilder sb = new StringBuilder();
 
-    public int[] getOnesAmongMuFittest(){
-      int[] numOnes = new int[getN()];
-      for (int i = 0; i < getMU(); i++){
-          int[] bitstring = population.get(i).getBitstring();
-          for (int j = 0; j < getN(); j++){
-              numOnes[j] += bitstring[j];
-          }
-      }
-      return numOnes;
-    }
+                // Append strings from array
+                for (double marginal : getModel()) {
+                        sb.append(String.valueOf(marginal));
+                        sb.append(",");
+                }
+                sb.append(String.valueOf(getBestFitness()));
+                sb.append(",");
+                sb.append(String.valueOf(getCurrentLevel()));
+                sb.append(",");
+                sb.append(String.valueOf(getPositionK()));
+                sb.append(",");
+                sb.append(String.valueOf(getSumK()));
 
-    public void updateModel(){
-      int[] numOnes = getOnesAmongMuFittest();
-      for (int i = 0; i < getN(); i++){
-            double newMarginal = ((double) numOnes[i]) / getMU();
-            if (newMarginal <= 1.0/getN())
-              newMarginal = 1.0/getN();
-            else if (newMarginal >= 1 - 1.0/getN())
-              newMarginal = 1 - 1.0/getN();
-            model[i] = newMarginal;
+                out.println(sb.toString());
+                out.flush();
+                out.close();
+        } catch (IOException err) {
+                err.printStackTrace();
         }
-    }
+}
 
-    public boolean isStopCondFulfilled(){
-        return (population.get(0).eval() == opt);
-    }
+public ArrayList<Individual> getPop(){
+        return population;
+}
 
-    public int getN(){
+public int getCurrentLevel(){
+        return currentLevel;
+}
+
+public int getPositionK(){
+        return k;
+}
+
+public void updateModel(){
+        currentLevel = -1;
+        k = -1;
+
+        int[] numOnes = new int[getN()];
+        for (int i = 0; i < getMU(); i++) {
+                int[] bitstring = population.get(i).getBitstring();
+                for (int j = 0; j < getN(); j++) {
+                        numOnes[j] += bitstring[j];
+                }
+        }
+
+        // get the current level
+        for (int i=0; i<getN(); i++) {
+                if (numOnes[i] != getMU()) break;
+                currentLevel++;
+        }
+
+        //get the k value
+        k = calculateK(currentLevel+1);
+
+        for (int i = 0; i < getN(); i++) {
+                double newMarginal = ((double) numOnes[i]) / getMU();
+                model[i] = (newMarginal <= 1.0/n) ? 1.0/n : ((newMarginal >= 1-1.0/n) ? 1-1.0/n : newMarginal);
+        }
+}
+
+// calculate the value of K
+public int calculateK(int startIndex){
+        int sum = 0;
+        int indx = startIndex;
+        while ((indx < getN()) && (sum < getMU())) {
+                for (int i=sum; i<getMU(); i++) {
+                        if (population.get(i).getBitstring()[indx] != 1) break;
+                        sum++;
+                }
+                indx++;
+        }
+        return (sum >= getMU()) ? indx-1 : getN();
+}
+
+
+public boolean isStopCondFulfilled(){
+        return (getBestFitness() == opt);
+}
+
+public int getN(){
         return n;
-    }
+}
 
-    public int getMU(){
+public int getMU(){
         return mu;
-    }
+}
 
-    public void sortPop(Comparator<Individual> cmp){
-        Collections.sort(population, cmp);
-    }
-
-    public void printCurrentLevel(int iteration){
-      int[] stats = countBitsAtBordersAfterCurrLevel();
-      String format = "%d \t %d \t %d \t %d \t %d \n";
-      System.out.printf(format, iteration, getCurrentLevel(), stats[0], stats[1], stats[2]);
-    }
-
-
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String[] args) {
-
-
-        if (args.length != 6){
-            System.out.println("ARGS: N ID Const Power(-1 for log) SelPressure Func");
-            System.exit(0);
+// return the sum of K-1 marginals
+public double getSumK(){
+        double sumK = 0;
+        for (int i = currentLevel+1; i < k; i++) {
+                sumK += model[i];
         }
+        return sumK;
+}
 
+public void sortPop(Comparator<Individual> cmp){
+        Collections.sort(population, cmp);
+}
+
+public void printStats(){
+        System.out.printf("\t %d  \t %d \t %d \t %f \n",
+                          getBestFitness(), getCurrentLevel(),
+                          getPositionK(), getSumK());
+
+}
+/**
+ * @param args the command line arguments
+ */
+public static void main(String[] args) {
+
+
+        if (args.length != 7) {
+                System.out.println("ARGS: N ID Const Power(-1 for log) SelPressure Func filename");
+                System.exit(0);
+        }
 
         // command-line arguments
         int n = Integer.parseInt(args[0]);
@@ -154,15 +211,14 @@ public class UMDA {
         int c = Integer.parseInt(args[2]);
         double power = Double.parseDouble(args[3]);
         double selPres = Double.parseDouble(args[4]);
-
-        //System.out.printf("%d \t %d \t %d \t %f \t %f \n", n, id, c, power, selPres);
+        String filename = args[6];
 
         int mu = 0;
 
-        if (power >= 0){
-          mu = c * ((int) Math.pow(n, power));
+        if (power >= 0) {
+                mu = c * ((int) Math.pow(n, power));
         } else {
-          mu = c * ((int) Math.log(n));
+                mu = c * ((int) Math.log(n));
         }
 
         int lambda = (int) ((int) mu / selPres);
@@ -171,32 +227,36 @@ public class UMDA {
 
         int opt = 0;
         Comparator<Individual> cmp = null;
+        Evaluator evaluator = null;
 
-        if (args[5].equalsIgnoreCase("onemax")){
-            opt = n;
-            cmp = new SortForOneMax();
-        } else if (args[5].equalsIgnoreCase("leadingones")){
-            opt = n;
-            cmp = new SortForLeadingOnes();
-        } else if (args[5].equalsIgnoreCase("binval")){
-            opt = n;
-            cmp = new SortForBinVal();
+        if (args[5].equalsIgnoreCase("onemax")) {
+                opt = n;
+                cmp = new SortForOneMax();
+                evaluator = new EvaluatorForOneMax();
+        } else if (args[5].equalsIgnoreCase("leadingones")) {
+                opt = n;
+                cmp = new SortForLeadingOnes();
+                evaluator = new EvaluatorForLeadingOnes();
+        } else if (args[5].equalsIgnoreCase("binval")) {
+                opt = n;
+                cmp = new SortForBinVal();
+                evaluator = new EvaluatorForLeadingOnes();  //use leadingones for now
         }
 
         // run
-        UMDA umda = new UMDA(n, mu, lambda, opt);
+        UMDA umda = new UMDA(n, mu, lambda, opt, evaluator);
         umda.sortPop(cmp);
+        //umda.printPop();
         int iteration = 1;
-        while (!umda.isStopCondFulfilled()){
-            System.out.println(iteration + "\n");
-            umda.printPop();
-            //umda.printCurrentLevel(iteration);
-            //System.out.printf("%d \t %d \n", iteration, umda.getPop().get(0).eval());
-            umda.updateModel();
-            umda.samplePop();
-            umda.sortPop(cmp);
-            iteration++;
+        while (!umda.isStopCondFulfilled()) {
+                System.out.print(iteration);
+                umda.printStats();
+                umda.printToCSV(filename);
+                umda.updateModel();
+                umda.samplePop();
+                umda.sortPop(cmp);
+                iteration++;
         }
-        //System.out.printf("%d \t %d \t %d\n", n, id, iteration*lambda);
-    }
+        System.out.printf("%d \t %d \t %d\n", n, id, iteration*lambda);
+}
 }
