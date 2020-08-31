@@ -9,17 +9,24 @@ import java.util.Comparator;
  *
  * @author pthnguyen
  */
-public class SortForOneMax implements Comparator<Individual>{
+public class SortForOneMax implements Comparator<Individual> {
 
-    @Override
-    public int compare(Individual o1, Individual o2) {
-        return eval(o2) - eval(o1);
-    }
+private Evaluator e;
 
-    private int eval(Individual o){
-        int sum = 0;
-        for (int i : o.getBitstring())
-            sum += i;
-        return sum;
-    }
+public SortForOneMax(Evaluator e){
+        this.e = e;
+}
+
+@Override
+public int compare(Individual o1, Individual o2) {
+// EvaluatorForOneMax e = new EvaluatorForOneMax();
+        return e.eval(o2) - e.eval(o1);
+}
+
+// private int eval(Individual o){
+//     int sum = 0;
+//     for (int i : o.getBitstring())
+//         sum += i;
+//     return sum;
+// }
 }

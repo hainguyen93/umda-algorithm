@@ -9,97 +9,135 @@ import java.io.PrintWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Map;
 
-/**
- * @author pthnguyen
- */
+
+// argument parser (similar to Python)
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 public class UMDA {
 
-private int n;
 private int mu;
 private int lambda;
-private int opt;
-private int k;      //random variable k
-private int currentLevel;      //current level
-private ArrayList<Individual> population;
-private double[] model;
-private Evaluator evaluator;
+private int maxIter;
+private int iteration;
+
+private Problem function;
+private Model model;
+private Population population;
 
 // constructor
-public UMDA(int n, int mu, int lambda, int opt, Evaluator evaluator){
-        this.n = n;
+public UMDA(int mu, int lambda, Problem function, int maxIter){
+        this.function = function;
         this.mu = mu;
         this.lambda = lambda;
-        this.opt = opt;
-        this.k = -1;
-        this.currentLevel = -1;
-        this.evaluator = evaluator;
-        population = new ArrayList<Individual>();
-        model = new double[n];
-        initModel();
-        samplePop();
+        this.maxIter = maxIter;
+        init();  // initialising
 }
 
-// initialise a uniform model
-public void initModel(){
-        for (int i = 0; i < getN(); i++) {
-                model[i] = 0.5;
-        }
+// initialising
+public void init(){
+        iteration = 1;
+        model = new Model(getN()); // uniform
+        population = new Population(getModel(), getLambda(),
+                                    getMU(), getN(), getCMP());
 }
 
-public double[] getModel(){
+public Problem getFunction(){
+        return function;
+}
+
+// increment the iteration counter
+public void nextIteration(){
+        iteration++;
+}
+
+public Model getModel(){
         return model;
+}
+
+public int getMaxIter(){
+        return maxIter;
 }
 
 public int getLambda(){
         return lambda;
 }
 
+public int getIteration(){
+        return iteration;
+}
+
+public int getOptimalValue(){
+        return getFunction().getOptimalValue();
+}
+
 public Evaluator getEvaluator(){
-        return evaluator;
+        return getFunction().getEvaluator();
 }
 
 public int getBestFitness(){
-        return evaluator.eval(population.get(0));
+        return getEvaluator().eval(getPop().getAnIndividual(0));
+}
+
+// get fitness value for the ind-th individual
+public int getFitness(int ind, Evaluator e){
+        if (ind < 0) ind = 0; // best
+        if (ind > getLambda()) ind = getLambda(); // worst
+        return e.eval(getPop().getAnIndividual(ind));
+}
+
+public int getBestOM(){
+        return (new EvaluatorForOneMax()).eval(getPop().getAnIndividual(0));
+}
+
+public int getBestLos(){
+        return (new EvaluatorForLeadingOnes()).eval(getPop().getAnIndividual(0));
 }
 
 public void samplePop(){
-        for (int i = 0; i < getLambda(); i++) {
-                Individual ind = new Individual(getN());
-                ind.sample(getModel());
-                population.add(ind);
-        }
+        getPop().samplePop(getModel());
 }
 
 // print out the population
-public void printPop(){
-        for (Individual o : population) {
-                for (int i : o.getBitstring())
-                        System.out.print(i);
-                System.out.println();
-        }
+public void printPop(int size){
+        getPop().printPop(size);
 }
 
 // print model and relevant stats to CSV file
 public void printToCSV(String filename){
+        if (filename == null) return;
         try {
                 PrintWriter out = new PrintWriter(
                         new BufferedWriter(
                                 new FileWriter(filename, true)));
                 StringBuilder sb = new StringBuilder();
 
-                // Append strings from array
-                for (double marginal : getModel()) {
+                // first iteration
+                if (getIteration() == 1) {
+                        for (int i = 1; i <= getN(); i++) {
+                                sb.append("p" + i);
+                                sb.append(",");
+                        }
+                        sb.append("BestFitness, CurLevel, BestOM, BestLOS\n");
+                }
+
+                for (double marginal : getModel().getVector()) {
                         sb.append(String.valueOf(marginal));
                         sb.append(",");
                 }
+
                 sb.append(String.valueOf(getBestFitness()));
                 sb.append(",");
                 sb.append(String.valueOf(getCurrentLevel()));
                 sb.append(",");
-                sb.append(String.valueOf(getPositionK()));
+                sb.append(String.valueOf(getBestOM()));
                 sb.append(",");
-                sb.append(String.valueOf(getSumK()));
+                sb.append(String.valueOf(getBestLos()));
 
                 out.println(sb.toString());
                 out.flush();
@@ -109,154 +147,207 @@ public void printToCSV(String filename){
         }
 }
 
-public ArrayList<Individual> getPop(){
+public Population getPop(){
         return population;
 }
 
 public int getCurrentLevel(){
-        return currentLevel;
+        return getPop().getCurrentLevel();
 }
 
-public int getPositionK(){
-        return k;
-}
-
+// update the model
 public void updateModel(){
-        currentLevel = -1;
-        k = -1;
-
-        int[] numOnes = new int[getN()];
-        for (int i = 0; i < getMU(); i++) {
-                int[] bitstring = population.get(i).getBitstring();
-                for (int j = 0; j < getN(); j++) {
-                        numOnes[j] += bitstring[j];
-                }
-        }
-
-        // get the current level
-        for (int i=0; i<getN(); i++) {
-                if (numOnes[i] != getMU()) break;
-                currentLevel++;
-        }
-
-        //get the k value
-        k = calculateK(currentLevel+1);
-
-        for (int i = 0; i < getN(); i++) {
-                double newMarginal = ((double) numOnes[i]) / getMU();
-                model[i] = (newMarginal <= 1.0/n) ? 1.0/n : ((newMarginal >= 1-1.0/n) ? 1-1.0/n : newMarginal);
-        }
+        getModel().updateModel(getPop());
 }
-
-// calculate the value of K
-public int calculateK(int startIndex){
-        int sum = 0;
-        int indx = startIndex;
-        while ((indx < getN()) && (sum < getMU())) {
-                for (int i=sum; i<getMU(); i++) {
-                        if (population.get(i).getBitstring()[indx] != 1) break;
-                        sum++;
-                }
-                indx++;
-        }
-        return (sum >= getMU()) ? indx-1 : getN();
-}
-
 
 public boolean isStopCondFulfilled(){
-        return (getBestFitness() == opt);
+        if (getIteration() >= getMaxIter()) {
+                System.out.println("Max Iteration Exceeded!");
+                return true;
+        } else if (getBestFitness() == getOptimalValue()) {
+                System.out.println("Optimal Solution Found");
+                return true;
+        }
+        return false;
 }
 
 public int getN(){
-        return n;
+        return getFunction().getSize();
+}
+
+// get the evaluator from Problem object
+public Comparator<Individual> getCMP(){
+        return getFunction().getCMP();
 }
 
 public int getMU(){
         return mu;
 }
 
-// return the sum of K-1 marginals
-public double getSumK(){
-        double sumK = 0;
-        for (int i = currentLevel+1; i < k; i++) {
-                sumK += model[i];
+public double getSelectivePressure(){
+        return 1.0 * getMU() / getLambda();
+}
+
+public String toString(){
+        return "UMDA Algorithm Setting:\n\tValue for MU: " + getMU() + " (= const * (function^power))"
+               + "\n\tValue for Lambda: " + getLambda() + " (= mu / selPre)"
+               + "\n\tSelective Pressure: " + getSelectivePressure();
+}
+
+public void sortPop(){
+        getPop().sortPop();
+}
+
+// print stats for the top k individuals
+public void printStats(int topK){
+        if (getIteration() <= 1) {
+                System.out.println("\nPROGRESSION:\nIndividual\tBest-Fitness\tBest-OneMax\tBest-LOS");
         }
-        return sumK;
+        System.out.printf("\nIteration #%d\n", getIteration());
+        for (int i=0; i< topK; i++) {
+                System.out.printf("Individual #%d\t%d\t%d\t%d\n",
+                                  i,
+                                  getFitness(i, getEvaluator()),
+                                  getFitness(i, new EvaluatorForOneMax()),
+                                  getFitness(i, new EvaluatorForLeadingOnes()));
+        }
 }
 
-public void sortPop(Comparator<Individual> cmp){
-        Collections.sort(population, cmp);
+// optimisation
+public void optimise(int num, String filename){
+        sortPop();
+        while (!isStopCondFulfilled()) {
+                printStats(num);
+                printToCSV(filename);
+                updateModel();
+                samplePop();
+                sortPop();
+                // printPop(mu);
+                nextIteration();
+        }
 }
 
-public void printStats(){
-        System.out.printf("\t %d  \t %d \t %d \t %f \n",
-                          getBestFitness(), getCurrentLevel(),
-                          getPositionK(), getSumK());
+// static method to parse args
+public static Map createArgsParser(String[] args){
+        ArgumentParser parser = ArgumentParsers.newFor("java UMDA")
+                                .build()
+                                .defaultHelp(true)
+                                .description("Optimise a pseudo-Boolean function by the UMDA Algorithm");
 
+        parser.addArgument("-Problem")
+        .choices("onemax", "leadingones", "binval", "jump")
+        .setDefault("onemax")
+        .type(String.class)
+        .dest("problem")
+        .help("Select a pseudo-Boolean function to optimise");
+
+        parser.addArgument("-n")
+        .type(int.class)
+        .setDefault(100)
+        .dest("n")
+        .help("Enter the problem instance size");
+
+        parser.addArgument("-id")
+        .type(int.class)
+        .setDefault(1)
+        .dest("id")
+        .help("Select the ID of the run (for parallel computing)");
+
+        parser.addArgument("-c")
+        .type(int.class)
+        .setDefault(5)
+        .dest("const")
+        .help("Select the leading constant in the population size MU");
+
+        parser.addArgument("-function")
+        .type(String.class)
+        .choices("log", "n", "nlog", "sqrtlog")
+        .setDefault("n")
+        .help("Select the size of the population size MU");
+
+        parser.addArgument("-p")
+        .type(double.class)
+        .setDefault(0.5)
+        .dest("power")
+        .help("Select the power in the population size MU");
+
+        parser.addArgument("-selPres")
+        .type(double.class)
+        .setDefault(0.4)
+        .dest("selPre")
+        .help("Select the selective pressure");
+
+        parser.addArgument("-fname")
+        .type(String.class)
+        .dest("filename")
+        .help("Select the filename to store the probability vectors");
+
+        parser.addArgument("-maxIter")
+        .type(int.class)
+        .setDefault(1000)
+        .dest("maxIter")
+        .help("Select the maximum number of iterations allowed");
+
+        parser.addArgument("-jumpGap")
+        .type(int.class)
+        .setDefault(10)
+        .dest("jumpGap")
+        .help("Enter the gap of the Jump function (only if Jump chosen)");
+
+        return parser.parseArgsOrFail(args).getAttrs();
 }
-/**
- * @param args the command line arguments
- */
+
+// main method
 public static void main(String[] args) {
 
-
-        if (args.length != 7) {
-                System.out.println("ARGS: N ID Const Power(-1 for log) SelPressure Func filename");
-                System.exit(0);
-        }
+        Map attrs = createArgsParser(args);
+        System.out.println(attrs.toString());
 
         // command-line arguments
-        int n = Integer.parseInt(args[0]);
-        int id = Integer.parseInt(args[1]);
-        int c = Integer.parseInt(args[2]);
-        double power = Double.parseDouble(args[3]);
-        double selPres = Double.parseDouble(args[4]);
-        String filename = args[6];
+        int n = (int) attrs.get("n");
+        int id = (int) attrs.get("id");
+        int c = (int) attrs.get("const");
+        double power = (double) attrs.get("power");
+        double selPres = (double) attrs.get("selPre");
+        int maxIter = (int) attrs.get("maxIter");
+        String problemName = String.valueOf(attrs.get("problem"));
+        int gapK = (int) attrs.get("jumpGap");
+        String func = String.valueOf(attrs.get("function"));
 
-        int mu = 0;
+        // optinal
+        String filename = (attrs.get("filename") != null)
+                          ? String.valueOf(attrs.get("filename"))
+                          : null;
 
-        if (power >= 0) {
-                mu = c * ((int) Math.pow(n, power));
-        } else {
-                mu = c * ((int) Math.log(n));
+        // population size MU
+        double fBase = 0.0;
+        switch (func) {
+        case "log": fBase = Math.log(n); break;
+        case "n": fBase = n; break;
+        case "nlog": fBase = n * Math.log(n); break;
+        case "sqrtlog": fBase = Math.sqrt(n) * Math.log(n);
         }
 
-        int lambda = (int) ((int) mu / selPres);
+        int mu = (int) (c * Math.pow(fBase, power));
+        int lambda = (int) (mu / selPres);
 
-        // configurations
+        // define the pseudo-Boolean function
+        Problem problem = null;
 
-        int opt = 0;
-        Comparator<Individual> cmp = null;
-        Evaluator evaluator = null;
-
-        if (args[5].equalsIgnoreCase("onemax")) {
-                opt = n;
-                cmp = new SortForOneMax();
-                evaluator = new EvaluatorForOneMax();
-        } else if (args[5].equalsIgnoreCase("leadingones")) {
-                opt = n;
-                cmp = new SortForLeadingOnes();
-                evaluator = new EvaluatorForLeadingOnes();
-        } else if (args[5].equalsIgnoreCase("binval")) {
-                opt = n;
-                cmp = new SortForBinVal();
-                evaluator = new EvaluatorForLeadingOnes();  //use leadingones for now
+        switch (problemName) {
+        case "onemax": problem = new OneMax(n); break;
+        case "leadingones": problem = new LeadingOnes(n); break;
+        case "binval": problem= new BinVal(n); break;
+        case "jump": problem = new Jump(n, gapK);
         }
 
-        // run
-        UMDA umda = new UMDA(n, mu, lambda, opt, evaluator);
-        umda.sortPop(cmp);
-        //umda.printPop();
-        int iteration = 1;
-        while (!umda.isStopCondFulfilled()) {
-                System.out.print(iteration);
-                umda.printStats();
-                umda.printToCSV(filename);
-                umda.updateModel();
-                umda.samplePop();
-                umda.sortPop(cmp);
-                iteration++;
-        }
-        System.out.printf("%d \t %d \t %d\n", n, id, iteration*lambda);
+        UMDA umda = new UMDA(mu, lambda, problem, maxIter);
+
+        System.out.println(problem.toString());
+        System.out.println(umda.toString());
+
+        // optimise
+        umda.optimise(10, filename);
+        // System.out.printf("%d, %d, %d, %d, %d\n", n, id, iteration*lambda, lambda, iteration);
 }
 }
