@@ -1,6 +1,6 @@
 /*
  * Implementation of the Univariate Marginal Distribution Algorithm in Java
- * @author: Phan Trung Hai Nguyen
+ * @author: Phan Trung Hai Nguyen (Uni. of Birmingham)
  */
 import java.util.ArrayList;
 import java.util.Collections;
@@ -299,13 +299,39 @@ public static Map createArgsParser(String[] args){
         return parser.parseArgsOrFail(args).getAttrs();
 }
 
+// calculate the population size MU from command-line args
+public static int estimateMUFromArgs(int n, int c, double power,
+                                     String function){
+        double fBase = 0.0;
+        switch (function) {
+        case "log": fBase = Math.log(n); break;
+        case "n": fBase = n; break;
+        case "nlog": fBase = n * Math.log(n); break;
+        case "sqrtlog": fBase = Math.sqrt(n) * Math.log(n);
+        }
+        return (int) (c * Math.pow(fBase, power));
+}
+
+// define the pseudo-Boolean function
+public static Problem parseProblemFromArgs(String prob){
+        Problem problem = null;
+        switch (prob) {
+        case "onemax": problem = new OneMax(n); break;
+        case "leadingones": problem = new LeadingOnes(n); break;
+        case "binval": problem= new BinVal(n); break;
+        case "jump": problem = new Jump(n, gapK);
+        }
+        return problem;
+}
+
+
 // main method
 public static void main(String[] args) {
 
+        // parse command-line arguments
         Map attrs = createArgsParser(args);
         System.out.println(attrs.toString());
 
-        // command-line arguments
         int n = (int) attrs.get("n");
         int id = (int) attrs.get("id");
         int c = (int) attrs.get("const");
@@ -316,40 +342,28 @@ public static void main(String[] args) {
         int gapK = (int) attrs.get("jumpGap");
         String func = String.valueOf(attrs.get("function"));
 
-        // optinal
+        // optional, output filename
         String filename = (attrs.get("filename") != null)
                           ? String.valueOf(attrs.get("filename"))
                           : null;
 
-        // population size MU
-        double fBase = 0.0;
-        switch (func) {
-        case "log": fBase = Math.log(n); break;
-        case "n": fBase = n; break;
-        case "nlog": fBase = n * Math.log(n); break;
-        case "sqrtlog": fBase = Math.sqrt(n) * Math.log(n);
-        }
-
-        int mu = (int) (c * Math.pow(fBase, power));
+        // population sizes
+        int mu = estimateMUFromArgs(n, c, power, func);
         int lambda = (int) (mu / selPres);
 
         // define the pseudo-Boolean function
-        Problem problem = null;
+        Problem problem = parseProblemFromArgs(problemName);
 
-        switch (problemName) {
-        case "onemax": problem = new OneMax(n); break;
-        case "leadingones": problem = new LeadingOnes(n); break;
-        case "binval": problem= new BinVal(n); break;
-        case "jump": problem = new Jump(n, gapK);
-        }
-
+        // instantiating UMDA object
         UMDA umda = new UMDA(mu, lambda, problem, maxIter);
 
+        // print useful info.
         System.out.println(problem.toString());
         System.out.println(umda.toString());
 
-        // optimise
+        // start optimising
         umda.optimise(10, filename);
-        // System.out.printf("%d, %d, %d, %d, %d\n", n, id, iteration*lambda, lambda, iteration);
+
+        System.out.printf("%d, %d, %d, %d, %d\n", n, id, iteration*lambda, lambda, iteration);
 }
 }
