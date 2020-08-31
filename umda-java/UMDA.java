@@ -1,5 +1,6 @@
 /*
  * Implementation of the Univariate Marginal Distribution Algorithm in Java
+ * @author: Phan Trung Hai Nguyen
  */
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,7 +11,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Map;
-
 
 // argument parser (similar to Python)
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -232,9 +232,11 @@ public static Map createArgsParser(String[] args){
         ArgumentParser parser = ArgumentParsers.newFor("java UMDA")
                                 .build()
                                 .defaultHelp(true)
-                                .description("Optimise a pseudo-Boolean function by the UMDA Algorithm");
+                                .description("Optimise a pseudo-Boolean function by the UMDA Algorithm. \n" +
+                                             "The population size MU is calculated as [const * (function^power)]. \n"+
+                                             "The population size LAMBDA then equals [MU / selPres].");
 
-        parser.addArgument("-Problem")
+        parser.addArgument("-prob")
         .choices("onemax", "leadingones", "binval", "jump")
         .setDefault("onemax")
         .type(String.class)
@@ -277,7 +279,7 @@ public static Map createArgsParser(String[] args){
         .dest("selPre")
         .help("Select the selective pressure");
 
-        parser.addArgument("-fname")
+        parser.addArgument("-filename")
         .type(String.class)
         .dest("filename")
         .help("Select the filename to store the probability vectors");
