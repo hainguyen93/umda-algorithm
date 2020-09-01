@@ -9,7 +9,12 @@ protected Evaluator evaluator;
 protected Comparator<Individual> cmp;
 
 //constructor
-public Problem(String name, int size, int optimalValue){
+public Problem(String name, int size, int optimalValue)
+throws NonPositiveProblemSizeException {
+        if (size <= 0) {
+                throw new NonPositiveProblemSizeException("Problem instance "+
+                                                          "size must be positive!");
+        }
         this.name = name;
         this.size = size;
         this.optimalValue = optimalValue;
