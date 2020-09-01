@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Map;
+import java.lang.Exception;
 
 // argument parser (similar to Python)
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -19,21 +20,33 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-public class UMDA {
+public class EDA {
 
-private int mu;
-private int lambda;
-private int maxIter;
-private int iteration;
+protected int mu;
+protected int lambda;
+protected int maxIter;
+protected int iteration;
+protected double smoothParam;
 
-private Problem function;
-private Model model;
-private Population population;
+protected Problem function;
+protected Model model;
+protected Population population;
 
-// constructor
-public UMDA(int mu, int lambda, Problem function, int maxIter){
+// constructor, EDA
+public EDA(int mu, int lambda, Problem function, int maxIter){
         this.function = function;
         this.mu = mu;
+        this.smoothParam = 1.0; //max value
+        this.lambda = lambda;
+        this.maxIter = maxIter;
+        init();  // initialising
+}
+
+// constructor, PBIL
+public EDA(int mu, int lambda, double smoothParam, Problem function, int maxIter){
+        this.function = function;
+        this.mu = mu;
+        this.smoothParam = smoothParam;
         this.lambda = lambda;
         this.maxIter = maxIter;
         init();  // initialising
@@ -49,6 +62,15 @@ public void init(){
 
 public Problem getFunction(){
         return function;
+}
+
+//return the smooth param
+public double getSmoothParam(){
+        return smoothParam;
+}
+
+public void changeSmoothParam(double newValue){
+        smoothParam = newValue;
 }
 
 // increment the iteration counter
@@ -157,7 +179,8 @@ public int getCurrentLevel(){
 
 // update the model
 public void updateModel(){
-        getModel().updateModel(getPop());
+        // getModel().updateModel(getPop());
+        getModel().updateModel(getPop(), getSmoothParam());
 }
 
 public boolean isStopCondFulfilled(){
@@ -189,9 +212,12 @@ public double getSelectivePressure(){
 }
 
 public String toString(){
-        return "UMDA Algorithm Setting:\n\tValue for MU: " + getMU() + " (= const * (function^power))"
-               + "\n\tValue for Lambda: " + getLambda() + " (= mu / selPre)"
-               + "\n\tSelective Pressure: " + getSelectivePressure();
+        return "EDA Algorithm Setting:\n\tValue for MU: " + getMU()
+               + " (= const * (function^power))"
+               + "\n\tValue for Lambda: " + getLambda()
+               + " (= mu / selPre)"
+               + "\n\tSelective Pressure: " + getSelectivePressure()
+               + "\n\tSmooth Param: "+ getSmoothParam();
 }
 
 public void sortPop(){
@@ -229,15 +255,26 @@ public void optimise(int num, String filename){
 
 // static method to parse args
 public static Map createArgsParser(String[] args){
-        ArgumentParser parser = ArgumentParsers.newFor("java UMDA")
+        ArgumentParser parser = ArgumentParsers.newFor("java EDA")
                                 .build()
                                 .defaultHelp(true)
-                                .description("Optimise a pseudo-Boolean function by the UMDA Algorithm. \n" +
+                                .description("Optimise a pseudo-Boolean function by a univariate EDA. \n" +
                                              "The population size MU is calculated as [const * (function^power)]. \n"+
-                                             "The population size LAMBDA then equals [MU / selPres].");
+                                             "The population size LAMBDA then equals [MU / selPres]. \n" +
+                                             "\u00a9 2020 by Phan Trung Hai Nguyen.");
 
-        parser.addArgument("-prob")
-        .choices("onemax", "leadingones", "binval", "jump")
+        parser.addArgument("--optimiser", "-optim")
+        .type(String.class)
+        .choices("EDA", "cga")
+        .setDefault("EDA")
+        .dest("optim")
+        .help("Select an optimiser. \nThe PBIL algorithm can be chosen by "+
+              "selecting the UMDA with a chosen smoothing parameter eta. "+
+              "\nNote that if cGA is chosen, "+
+              "the population size of MU becomes the abstract population size K");
+
+        parser.addArgument("--problem", "-prob")
+        .choices("onemax", "leadingones", "binval", "jump", "dlb", "scpath")
         .setDefault("onemax")
         .type(String.class)
         .dest("problem")
@@ -255,42 +292,51 @@ public static Map createArgsParser(String[] args){
         .dest("id")
         .help("Select the ID of the run (for parallel computing)");
 
-        parser.addArgument("-c")
+        parser.addArgument("--const", "-c")
         .type(int.class)
         .setDefault(5)
         .dest("const")
-        .help("Select the leading constant in the population size MU");
+        .help("Select the leading constant in the population size MU "+
+              "(or the abstract population size K if cGA is chosen)");
 
-        parser.addArgument("-function")
+        parser.addArgument("--function", "-f")
         .type(String.class)
         .choices("log", "n", "nlog", "sqrtlog")
         .setDefault("n")
-        .help("Select the size of the population size MU");
+        .help("Select the size of the population size MU "+
+              "(or abstract population size K if cGA is chosen)");
 
-        parser.addArgument("-p")
+        parser.addArgument("--power", "-p")
         .type(double.class)
         .setDefault(0.5)
         .dest("power")
-        .help("Select the power in the population size MU");
+        .help("Select the power in the population size MU "+
+              "(or abstract population size K if cGA is chosen)");
 
-        parser.addArgument("-selPres")
+        parser.addArgument("-eta", "--smoothParam")
+        .type(double.class)
+        .setDefault(1.0)
+        .dest("smoothParam")
+        .help("Select a smoothing parameter (only for PBIL, it's 1.0 for EDA)");
+
+        parser.addArgument("--selPres", "-sp")
         .type(double.class)
         .setDefault(0.4)
         .dest("selPre")
         .help("Select the selective pressure");
 
-        parser.addArgument("-filename")
+        parser.addArgument("--filename", "-fname")
         .type(String.class)
         .dest("filename")
         .help("Select the filename to store the probability vectors");
 
-        parser.addArgument("-maxIter")
+        parser.addArgument("--maxIter", "-mi")
         .type(int.class)
         .setDefault(1000)
         .dest("maxIter")
         .help("Select the maximum number of iterations allowed");
 
-        parser.addArgument("-jumpGap")
+        parser.addArgument("--jumpGap", "-jg")
         .type(int.class)
         .setDefault(10)
         .dest("jumpGap")
@@ -313,15 +359,46 @@ public static int estimateMUFromArgs(int n, int c, double power,
 }
 
 // define the pseudo-Boolean function
-public static Problem parseProblemFromArgs(String prob){
+public static Problem parseProblemFromArgs(String prob, int n, int gapK) throws Exception {
         Problem problem = null;
         switch (prob) {
-        case "onemax": problem = new OneMax(n); break;
-        case "leadingones": problem = new LeadingOnes(n); break;
-        case "binval": problem= new BinVal(n); break;
-        case "jump": problem = new Jump(n, gapK);
+        case "onemax":
+                problem = new OneMax(n);
+                break;
+        case "leadingones":
+                problem = new LeadingOnes(n);
+                break;
+        case "binval":
+                problem= new BinVal(n);
+                break;
+        case "jump":
+                problem = new Jump(n, gapK);
+                break;
+        case "dlb":
+                if (n % 2 != 0) {  //n is odd
+                        throw new Exception("DLB requires an even n.");
+                }
+                problem = new DLB(n);
+                break;
+        case "scpath":
+                problem = new SCPath(n);
         }
         return problem;
+}
+
+// print final summary at the end of the run
+public static void printSummary(int iteration, int lambda, int maxIter){
+        if (iteration >= maxIter) {
+                System.out.println("\nSUMMARY:\n\tThe algorithm COULD NOT find " +
+                                   "the optimal solution within the allowed "+
+                                   "budget and the chosen parameter settings");
+        } else {
+                System.out.printf("\nSUMMARY:\n\tThe algorithm did find the " +
+                                  "optimal solution for the chosen problem "+
+                                  "after %d iterations. \n\tThe empirical runtime "+
+                                  "(in terms of the number of function evaluations) "+
+                                  "is %d\n", iteration, iteration*lambda);
+        }
 }
 
 
@@ -332,10 +409,12 @@ public static void main(String[] args) {
         Map attrs = createArgsParser(args);
         System.out.println(attrs.toString());
 
+        String optim = String.valueOf(attrs.get("optim"));
         int n = (int) attrs.get("n");
         int id = (int) attrs.get("id");
         int c = (int) attrs.get("const");
         double power = (double) attrs.get("power");
+        double smoothParam = (double) attrs.get("smoothParam");
         double selPres = (double) attrs.get("selPre");
         int maxIter = (int) attrs.get("maxIter");
         String problemName = String.valueOf(attrs.get("problem"));
@@ -352,18 +431,33 @@ public static void main(String[] args) {
         int lambda = (int) (mu / selPres);
 
         // define the pseudo-Boolean function
-        Problem problem = parseProblemFromArgs(problemName);
+        Problem problem = null;
+        try {
+                problem = parseProblemFromArgs(problemName, n, gapK);
+        } catch (Exception e) {
+                System.out.println("ERROR: "+ e.getMessage());
+                System.exit(0);
+        }
 
-        // instantiating UMDA object
-        UMDA umda = new UMDA(mu, lambda, problem, maxIter);
+        // instantiating EDA object
+        // EDA EDA = new EDA(mu, lambda, problem, maxIter);
+        EDA EDA = null;
+        switch (optim) {
+        case "EDA":
+                EDA = new EDA(mu, lambda, smoothParam, problem, maxIter);
+                break;
+        case "cga":
+                EDA = new CGA(mu, problem, maxIter);
+        }
 
         // print useful info.
         System.out.println(problem.toString());
-        System.out.println(umda.toString());
+        System.out.println(EDA.toString());
 
         // start optimising
-        umda.optimise(10, filename);
+        EDA.optimise(2, filename);
 
-        System.out.printf("%d, %d, %d, %d, %d\n", n, id, iteration*lambda, lambda, iteration);
+        printSummary(EDA.getIteration(), EDA.getLambda(), EDA.getMaxIter());
+        //System.out.printf("%d, %d, %d, %d, %d\n", n, id, iteration*lambda, lambda, iteration);
 }
 }

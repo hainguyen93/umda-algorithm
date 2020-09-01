@@ -49,4 +49,17 @@ public int getN(){
 public int[] getBitstring(){
         return bitstring;
 }
+
+public int getABit(int indx){
+        return getBitstring()[indx];
+}
+
+// calculate the sum of bits from start to end (inclusively)
+public int getSumOfBits(int start, int end){
+        int sum = 0;
+        for (int i=start; i<=end; i++) {
+                sum += getABit(i);
+        }
+        return sum;
+}
 }

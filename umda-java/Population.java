@@ -63,10 +63,6 @@ public int getN(){
         return n;
 }
 
-// public int getCurrentLevel(){
-//         return currentLevel;
-// }
-
 public ArrayList<Individual> getArray(){
         return array;
 }
@@ -93,11 +89,6 @@ public void printPop(int size){
                 }
                 System.out.println();
         }
-        // for (Individual o : population) {
-        //         for (int i : o.getBitstring())
-        //                 System.out.print(i);
-        //         System.out.println();
-        // }
 }
 
 }
